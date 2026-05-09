@@ -9,9 +9,12 @@ struct ContentView: View {
     @State private var dragLocation: CGPoint?
     @State private var dragGrabOffset = CGSize.zero
     @State private var applicationTileFrames: [String: CGRect] = [:]
+    @State private var hoveredApplicationBundleIdentifier: String?
+    @State private var selectedApplicationKind: ApplicationKind?
     private let placement: LauncherPanelPlacement
     private let arrowSize = CGSize(width: 24, height: 12)
     private let cornerRadius: CGFloat = 18
+    private let reorderPressDuration = 0.5
     private static let reorderCoordinateSpace = "application-reorder-space"
 
     init(placement: LauncherPanelPlacement = .preview) {
@@ -58,31 +61,46 @@ struct ContentView: View {
     }
 
     private var applicationSections: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                ForEach(viewModel.sections) { section in
-                    VStack(alignment: .leading, spacing: 7) {
-                        SectionHeader(title: section.title, showsSettings: showsSettingsButton(for: section)) {
-                            isShowingSettings = true
-                        }
+        VStack(alignment: .leading, spacing: 10) {
+            ApplicationKindTabs(
+                sections: viewModel.sections,
+                selectedKind: selectedSection.kind,
+                showsSettings: showsSettingsButton(for: selectedSection)
+            ) { kind in
+                selectedApplicationKind = kind
+                hoveredApplicationBundleIdentifier = nil
+                finishReorder()
+            } settingsAction: {
+                isShowingSettings = true
+            }
 
-                        LazyVGrid(columns: columns, spacing: 8) {
-                            ForEach(section.applications) { application in
-                                reorderableApplicationTile(application, in: section)
-                            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(selectedSection.applications) { application in
+                            reorderableApplicationTile(application, in: selectedSection)
                         }
                     }
                 }
+                .padding(.vertical, 1)
             }
-            .padding(.vertical, 1)
-        }
-        .scrollIndicators(.hidden)
-        .coordinateSpace(name: Self.reorderCoordinateSpace)
-        .onPreferenceChange(ApplicationTileFramePreferenceKey.self) { frames in
-            applicationTileFrames = frames
+            .scrollIndicators(.hidden)
+            .coordinateSpace(name: Self.reorderCoordinateSpace)
+            .onPreferenceChange(ApplicationTileFramePreferenceKey.self) { frames in
+                applicationTileFrames = frames
+            }
         }
         .onAppear {
+            selectedApplicationKind = selectedSection.kind
             viewModel.refreshRunningApplications()
+        }
+        .onChange(of: viewModel.sections) { _, sections in
+            guard let selectedApplicationKind, sections.contains(where: { $0.kind == selectedApplicationKind }) else {
+                self.selectedApplicationKind = sections.first?.kind
+                hoveredApplicationBundleIdentifier = nil
+                finishReorder()
+                return
+            }
         }
     }
 
@@ -91,25 +109,38 @@ struct ContentView: View {
         ApplicationTile(
             application: application,
             isRunning: viewModel.isRunning(application),
-            isReorderTarget: reorderTargetBundleIdentifier == application.bundleIdentifier
-        ) {
-            guard draggingApplication == nil else {
-                draggingApplication = nil
-                reorderTargetBundleIdentifier = nil
-                return
+            isHovering: hoveredApplicationBundleIdentifier == application.bundleIdentifier,
+            isReorderTarget: reorderTargetBundleIdentifier == application.bundleIdentifier,
+            dropped: { urls in
+                viewModel.open(application, urls: urls)
             }
-
-            viewModel.open(application)
-        } dropped: { urls in
-            viewModel.open(application, urls: urls)
-        }
+        )
         .scaleEffect(draggingApplication?.bundleIdentifier == application.bundleIdentifier ? 1.04 : 1)
         .opacity(draggingApplication?.bundleIdentifier == application.bundleIdentifier ? 0.88 : 1)
         .offset(dragOffset(for: application))
         .zIndex(draggingApplication?.bundleIdentifier == application.bundleIdentifier ? 10 : 0)
         .animation(.snappy(duration: 0.16), value: viewModel.sections)
         .background(tileFrameReader(for: application))
-        .highPriorityGesture(reorderGesture(for: application, in: section))
+        .overlay {
+            ApplicationTileInteractionLayer(
+                longPressDuration: reorderPressDuration,
+                clicked: {
+                    viewModel.open(application)
+                },
+                longPressed: { location in
+                    startReorder(application, at: location)
+                },
+                dragged: { location in
+                    updateReorder(application, in: section, at: location)
+                },
+                hoveringChanged: { isHovering in
+                    updateHoverState(for: application, isHovering: isHovering)
+                },
+                ended: {
+                    finishReorder()
+                }
+            )
+        }
     }
 
     private func enterReorderMode(with application: InstalledApplication) -> Void {
@@ -128,35 +159,12 @@ struct ContentView: View {
         dragGrabOffset = .zero
     }
 
-    private func reorderGesture(for application: InstalledApplication, in section: ApplicationSection) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.28)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.reorderCoordinateSpace)))
-            .onChanged { value in
-                switch value {
-                case .first(true):
-                    enterReorderMode(with: application)
-                case let .second(true, drag?):
-                    enterReorderMode(with: application)
-                    updateDragLocation(drag, for: application)
-                    reorderApplication(application, in: section, at: drag.location)
-                default:
-                    break
-                }
-            }
-            .onEnded { _ in
-                finishReorder()
-            }
-    }
-
-    private func updateDragLocation(_ drag: DragGesture.Value, for application: InstalledApplication) -> Void {
-        if dragLocation == nil, let frame = applicationTileFrames[application.bundleIdentifier] {
-            dragGrabOffset = CGSize(
-                width: drag.startLocation.x - frame.midX,
-                height: drag.startLocation.y - frame.midY
-            )
+    private func updateHoverState(for application: InstalledApplication, isHovering: Bool) -> Void {
+        if isHovering {
+            hoveredApplicationBundleIdentifier = application.bundleIdentifier
+        } else if hoveredApplicationBundleIdentifier == application.bundleIdentifier {
+            hoveredApplicationBundleIdentifier = nil
         }
-
-        dragLocation = drag.location
     }
 
     private func reorderApplication(_ application: InstalledApplication, in section: ApplicationSection, at location: CGPoint) -> Void {
@@ -174,6 +182,43 @@ struct ContentView: View {
         if viewModel.moveApplication(withBundleIdentifier: application.bundleIdentifier, to: destinationIndex, in: section.kind) {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         }
+    }
+
+    private func startReorder(_ application: InstalledApplication, at localLocation: CGPoint) -> Void {
+        guard let location = coordinateSpaceLocation(for: application, localLocation: localLocation) else {
+            return
+        }
+
+        if let frame = applicationTileFrames[application.bundleIdentifier] {
+            dragGrabOffset = CGSize(
+                width: localLocation.x - frame.width / 2,
+                height: localLocation.y - frame.height / 2
+            )
+        }
+
+        dragLocation = location
+        enterReorderMode(with: application)
+    }
+
+    private func updateReorder(_ application: InstalledApplication, in section: ApplicationSection, at localLocation: CGPoint) -> Void {
+        guard let location = coordinateSpaceLocation(for: application, localLocation: localLocation) else {
+            return
+        }
+
+        if draggingApplication?.bundleIdentifier != application.bundleIdentifier {
+            startReorder(application, at: localLocation)
+        }
+
+        dragLocation = location
+        reorderApplication(application, in: section, at: location)
+    }
+
+    private func coordinateSpaceLocation(for application: InstalledApplication, localLocation: CGPoint) -> CGPoint? {
+        guard let frame = applicationTileFrames[application.bundleIdentifier] else {
+            return nil
+        }
+
+        return CGPoint(x: frame.minX + localLocation.x, y: frame.minY + localLocation.y)
     }
 
     private func destinationIndex(for application: InstalledApplication, in section: ApplicationSection, at location: CGPoint) -> Int? {
@@ -252,6 +297,14 @@ struct ContentView: View {
             GridItem(.flexible(minimum: 92), spacing: 8),
             GridItem(.flexible(minimum: 92), spacing: 8)
         ]
+    }
+
+    private var selectedSection: ApplicationSection {
+        if let selectedApplicationKind, let section = viewModel.sections.first(where: { $0.kind == selectedApplicationKind }) {
+            return section
+        }
+
+        return viewModel.sections[0]
     }
 
     private func showsSettingsButton(for section: ApplicationSection) -> Bool {

@@ -2,6 +2,20 @@ import Foundation
 
 struct ApplicationDiscovery {
     private static let developerToolsCategory = "public.app-category.developer-tools"
+    private static let browserBundleIdentifiers: Set<String> = [
+        "app.zen-browser.zen",
+        "com.apple.Safari",
+        "com.brave.Browser",
+        "com.duckduckgo.macos.browser",
+        "com.google.Chrome",
+        "com.kagi.kagimacOS",
+        "com.microsoft.edgemac",
+        "com.operasoftware.Opera",
+        "com.vivaldi.Vivaldi",
+        "company.thebrowser.Browser",
+        "org.chromium.Chromium",
+        "org.mozilla.firefox"
+    ]
 
     static func discoverSections() -> [ApplicationSection] {
         let applications = discoverApplications()
@@ -52,6 +66,10 @@ struct ApplicationDiscovery {
     private static func classify(bundle: Bundle, category: String?) -> ApplicationKind? {
         if declaresShellDocumentSupport(bundle: bundle) {
             return .terminal
+        }
+
+        if let bundleIdentifier = bundle.bundleIdentifier, browserBundleIdentifiers.contains(bundleIdentifier) {
+            return .browser
         }
 
         if category == developerToolsCategory {

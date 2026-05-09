@@ -29,7 +29,7 @@ final class LauncherPanelController {
         panel.setFrame(scaledFrame(layout.frame, scale: 0.96), display: false)
 
         NSApplication.shared.activate()
-        panel.makeKeyAndOrderFront(nil)
+        panel.orderFrontRegardless()
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.14

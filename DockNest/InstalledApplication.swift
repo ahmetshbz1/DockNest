@@ -16,6 +16,7 @@ struct InstalledApplication: Identifiable, Hashable {
 enum ApplicationKind: String, CaseIterable {
     case ide
     case terminal
+    case browser
 
     var title: String {
         switch self {
@@ -23,6 +24,8 @@ enum ApplicationKind: String, CaseIterable {
             return "IDE"
         case .terminal:
             return "Terminal"
+        case .browser:
+            return "Browser"
         }
     }
 }

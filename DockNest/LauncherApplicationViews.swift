@@ -208,6 +208,10 @@ struct ApplicationTileInteractionLayer: NSViewRepresentable {
         private var trackingArea: NSTrackingArea?
         private let clickMovementTolerance: CGFloat = 8
 
+        override var isFlipped: Bool {
+            true
+        }
+
         override var acceptsFirstResponder: Bool {
             true
         }

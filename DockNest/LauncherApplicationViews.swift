@@ -31,6 +31,7 @@ struct SectionHeader: View {
 struct ApplicationTile: View {
     let application: InstalledApplication
     let isRunning: Bool
+    let isReorderTarget: Bool
     let action: () -> Void
     let dropped: ([URL]) -> Void
 
@@ -100,11 +101,11 @@ struct ApplicationTile: View {
 
     private var tileBorder: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .stroke(isDropTargeted ? Color.accentColor.opacity(0.65) : Color.clear, lineWidth: 1)
+            .stroke(isDropTargeted || isReorderTarget ? Color.accentColor.opacity(0.65) : Color.clear, lineWidth: 1)
     }
 
     private var backgroundColor: Color {
-        if isDropTargeted {
+        if isDropTargeted || isReorderTarget {
             return Color.accentColor.opacity(0.16)
         }
 

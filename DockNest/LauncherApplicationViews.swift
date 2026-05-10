@@ -18,9 +18,9 @@ struct SectionHeader: View {
             if showsSettings {
                 Button(action: settingsAction) {
                     Image(systemName: "gearshape")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11, weight: .semibold))
                 }
-                .buttonStyle(.borderless)
+                .dockNestPopoverCircleButton(size: 28)
                 .help("Ayarlar")
                 .dockNestTooltip("Ayarlar", alignment: .bottom, offsetY: 8)
             }
@@ -36,7 +36,12 @@ struct ApplicationKindTabs: View {
     let selectionChanged: (ApplicationKind) -> Void
     let settingsAction: () -> Void
 
+    @State private var hoveredKind: ApplicationKind?
+
     var body: some View {
+        let tabShape = RoundedRectangle(cornerRadius: 11, style: .continuous)
+        let tabContainerShape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+
         HStack(spacing: 8) {
             HStack(spacing: 3) {
                 ForEach(sections) { section in
@@ -46,27 +51,39 @@ struct ApplicationKindTabs: View {
                         Text(section.title)
                             .font(.system(size: 11, weight: .semibold))
                             .lineLimit(1)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .frame(minWidth: 62)
-                            .background(tabBackground(for: section.kind))
+                            .frame(minWidth: 68, minHeight: 26)
                             .foregroundStyle(tabForeground(for: section.kind))
+                            .contentShape(tabShape)
                     }
                     .buttonStyle(.plain)
-                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .background(tabBackground(for: section.kind), in: tabShape)
+                    .overlay {
+                        tabShape
+                            .stroke(tabBorder(for: section.kind), lineWidth: 1)
+                    }
+                    .contentShape(tabShape)
+                    .onHover { isHovering in
+                        hoveredKind = isHovering ? section.kind : nil
+                    }
+                    .animation(.easeOut(duration: 0.12), value: hoveredKind)
+                    .animation(.easeOut(duration: 0.16), value: selectedKind)
                 }
             }
             .padding(3)
-            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(Color.primary.opacity(0.065), in: tabContainerShape)
+            .overlay {
+                tabContainerShape
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)
 
             if showsSettings {
                 Button(action: settingsAction) {
                     Image(systemName: "gearshape")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11, weight: .semibold))
                 }
-                .buttonStyle(.borderless)
+                .dockNestPopoverCircleButton(size: 28)
                 .help("Ayarlar")
                 .dockNestTooltip("Ayarlar", alignment: .bottom, offsetY: 8)
             }
@@ -75,11 +92,31 @@ struct ApplicationKindTabs: View {
     }
 
     private func tabBackground(for kind: ApplicationKind) -> some ShapeStyle {
-        kind == selectedKind ? AnyShapeStyle(Color.primary.opacity(0.13)) : AnyShapeStyle(Color.clear)
+        if kind == selectedKind {
+            return AnyShapeStyle(Color.accentColor.opacity(0.18))
+        }
+
+        if hoveredKind == kind {
+            return AnyShapeStyle(Color.primary.opacity(0.08))
+        }
+
+        return AnyShapeStyle(Color.clear)
     }
 
     private func tabForeground(for kind: ApplicationKind) -> some ShapeStyle {
         kind == selectedKind ? AnyShapeStyle(Color.primary) : AnyShapeStyle(Color.secondary)
+    }
+
+    private func tabBorder(for kind: ApplicationKind) -> Color {
+        if kind == selectedKind {
+            return Color.accentColor.opacity(0.34)
+        }
+
+        if hoveredKind == kind {
+            return Color.primary.opacity(0.12)
+        }
+
+        return Color.clear
     }
 }
 

@@ -38,15 +38,15 @@ struct LauncherSettingsView: View {
             Button(action: backAction) {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
 
                     Text("Ayarlar")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .dockNestPopoverCapsuleButton()
             .help("Geri")
+            .dockNestTooltip("Geri", alignment: .bottom, offsetY: 8)
 
             Spacer()
         }
